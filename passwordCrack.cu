@@ -51,41 +51,59 @@ __global__ void parallel_passwordCrack(int length,int*d_output,int *a, long atte
 	int mark=0;
         char alphabetTable[] = { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };        
 	int newB[1000]; 
- 
-
-do{
-
-
-    newB[0]++;
-        
-    if(mark<length){
-        if (newB[idx] >= 26 + alphabetTable[idx]){ 
-            newB[idx] -= 26; 
-            newB[idx+1]++;
-    }
-}else{
-        mark++;
-    }
-    
-    cracked=true;
-    for(int k=0; k<length; k++)
-    {
-        if(newB[k]!=a[k]){
-            cracked=false;
-            break;
-        }else
+  char alph ;//= 'a';
+while(!cracked){
+      alph =alphabetTable[rand()%26];
+       d_output[idx] = int(alph);
+     __syncthreads();
+      for(int i = 0; i< length; i++){
+        if(d_output[i] != a[i])
         {
-            cracked = true;
-        }
-    }
-//    if( (tries & 0x7ffffff) == 0 )
-//        cout << "\r       \r   ";
-//    else if( (tries & 0x1ffffff) == 0 )
-//        cout << ".";
-    attempts++;
-}while(cracked==false);
+          cracked = false;
 
-	d_output[idx] = newB[idx];
+        }
+        else{
+          cracked = true;
+        }
+      }
+  }
+
+
+
+
+// do{
+
+
+//     newB[0]++;
+        
+//     if(mark<length){
+//         if (newB[idx] >= 26 + alphabetTable[idx]){ 
+//             newB[idx] -= 26; 
+//             newB[idx+1]++;
+//     }
+// }else{
+//         mark++;
+//     }
+    
+//     cracked=true;
+//     for(int k=0; k<length; k++)
+//     {
+//         if(newB[k]!=a[k]){
+//             cracked=false;
+//             break;
+//         }else
+//         {
+//             cracked = true;
+//         }
+//     }
+// //    if( (tries & 0x7ffffff) == 0 )
+// //        cout << "\r       \r   ";
+// //    else if( (tries & 0x1ffffff) == 0 )
+// //        cout << ".";
+//     attempts++;
+// }while(cracked==false);
+
+//newB[idx];
 	
 
 }
@@ -148,7 +166,7 @@ err = cudaMemcpy(d_input, a,result,cudaMemcpyHostToDevice);
       exit(EXIT_FAILURE);
   }
 //launch the kernel
-int threards = 1;//(length*1000)/1024;
+int threards = length;//(length*1000)/1024;
 
 
    // for(int i = 0; i< length; i++){
@@ -171,7 +189,7 @@ cudaMemcpy(h_gpu_result,d_output,1000*sizeof(int),cudaMemcpyDeviceToHost);
 cout << "\nParallel Password Cracked: " << endl;
 for(int i=0; i<length; i++){
 //	cout << char(h_gpu_result[i]);
-    printf("%d\n", h_gpu_result[i] );
+    printf("%c\n", char(h_gpu_result[i]));
 }
 cout << "\nNumber of attempts: " << attempts << endl;
 
