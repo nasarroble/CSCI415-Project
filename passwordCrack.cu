@@ -6,8 +6,13 @@
 #include<sys/time.h>
 #include<stdio.h>
 #include<iomanip>
-#include <cuda_runtime.h>
+/* we need these includes for CUDA's random number stuff */
+#include<curand.h>
+#include<curand_kernel.h>
 using namespace std;
+
+
+#define MAX 26
 
  //array of all possible password characters
 int b[1000]; //array of attempted password cracks
@@ -51,27 +56,31 @@ __global__ void parallel_passwordCrack(int length,int*d_output,int *a, long atte
 	int mark=0;
         char alphabetTable[] = { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };        
 	int newB[1000]; 
-  char alph ;//= 'a';
-while(!cracked){
-      alph =alphabetTable[rand()%26];
-       d_output[idx] = int(alph);
-     __syncthreads();
-      for(int i = 0; i< length; i++){
-        if(d_output[i] != a[i])
-        {
-          cracked = false;
 
-        }
-        else{
-          cracked = true;
-        }
-      }
-  }
+ // // randoms(states,alphabetTable,d_output);
+
+ //  char alph ;//= 'a';
+// while(!cracked){
+//       alph =alphabetTable[rand()%26];
+//        d_output[idx] = int(alph);
+//      __syncthreads();
+//       for(int i = 0; i< length; i++){
+//         if(d_output[i] != a[i])
+//         {
+//           cracked = false;
+
+//         }
+//         else{
+//           cracked = true;
+//         }
+//       }
+//   }
+
+__shared__ int nIter;
+__shared__ int idT;
 
 
-
-
-// do{
+do{
 
 
 //     newB[0]++;
@@ -84,27 +93,67 @@ while(!cracked){
 // }else{
 //         mark++;
 //     }
+
+   newB[0]++;
+    for(int i =0; i<length; i++){
+        if (newB[i] >= 26 + alphabetTable[i]){ 
+            newB[i] -= 26; 
+            newB[i+1]++;
+        }else break;
+    }
     
-//     cracked=true;
-//     for(int k=0; k<length; k++)
-//     {
-//         if(newB[k]!=a[k]){
-//             cracked=false;
-//             break;
-//         }else
-//         {
-//             cracked = true;
-//         }
-//     }
-// //    if( (tries & 0x7ffffff) == 0 )
-// //        cout << "\r       \r   ";
-// //    else if( (tries & 0x1ffffff) == 0 )
-// //        cout << ".";
-//     attempts++;
-// }while(cracked==false);
+    cracked=true;
+  //  nIter = 1;
+    for(int k=0; k<length; k++)
+    {
+        if(newB[k]!=a[k]){
+            cracked=false;
+         //   nIter = 0;
+            break;
+        }else
+        {
+            cracked = true;
+           // nIter = 1;
+            // printf("idx:  %d  found\n", idx);
+            //  d_output[k] = newB[k];
+
+        }
+    }
+    if(cracked){
+      __syncthreads();
+      idT = idx;
+      nIter = 1;
+       __syncthreads();
+      break;
+
+    }
+//    if( (tries & 0x7ffffff) == 0 )
+//        cout << "\r       \r   ";
+//    else if( (tries & 0x1ffffff) == 0 )
+//        cout << ".";
+    attempts++;
+}while(!cracked);
+
+if(idx == idT){
+        for(int i = 0; i< length; i++){
+  
+             d_output[i] = newB[i];
+    }
+
+
+}
 
 //newB[idx];
-	
+
+
+//    if( idx == 2 ){
+//          nIter =idx+1;
+//          printf("idx: %d: found, %d\n", idx, nIter);
+//        }
+// if(!nIter){
+//   printf("idx: %d: not found \n", idx);
+// }
+
 
 }
 
@@ -132,7 +181,7 @@ int main()
 {
 int length; //length of password
 int random; //random password to be generated
-long attempts; //number of attempts to crack the password
+long attempts = 0; //number of attempts to crack the password
 int *d_input = (int *) malloc(result);;
 
 
@@ -166,13 +215,23 @@ err = cudaMemcpy(d_input, a,result,cudaMemcpyHostToDevice);
       exit(EXIT_FAILURE);
   }
 //launch the kernel
-int threards = length;//(length*1000)/1024;
+int threards = length*10;//(length*1000)/1024;
 
 
    // for(int i = 0; i< length; i++){
    //  printf("value: %d\n", d_input[i]);
    // }
 //    
+
+/* CUDA's random number library uses curandState_t to keep track of the seed value
+     we will store a random state for every thread  */
+  curandState_t* states;
+
+  /* allocate space on the GPU for the random states */
+//  cudaMalloc((void**) &states, threards * sizeof(curandState_t));
+    /* invoke the GPU to initialize all of the random states */
+//   init<<<threards, threards>>>(time(0), states);
+
 
 //parallel_passwordCrack<<<threards,1024>>>(length,d_output,d_input,attempts);
 parallel_passwordCrack<<<1,threards>>>(length,d_output,d_input,attempts);
@@ -195,6 +254,7 @@ cout << "\nNumber of attempts: " << attempts << endl;
 
 cudaFree(d_output);
 cudaFree(d_input);
+cudaFree(states);
 free(h_gpu_result);
 
 return 0;
